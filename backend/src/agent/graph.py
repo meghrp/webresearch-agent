@@ -1,54 +1,39 @@
-"""LangGraph single-node graph template.
-
-Returns a predefined response. Replace logic and configuration as needed.
-"""
-
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, TypedDict
-
-from langchain_core.runnables import RunnableConfig
+import os
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph
+from state import ConversationState
+
+from schemas import SearchQueryList
+from prompts import query_writer_prompt
+from utils import get_current_date, get_research_topic
 
 
-class Configuration(TypedDict):
-    """Configurable parameters for the agent.
+def create_queries(state: ConversationState, config) -> dict:
+    """Node that creates a list of search queries based on user's question."""
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
+        temperature=1.0,
+        max_retries=2,
+        api_key=os.getenv("GEMINI_API_KEY"),
+    )
 
-    Set these when creating assistants OR when invoking the graph.
-    See: https://langchain-ai.github.io/langgraph/cloud/how-tos/configuration_cloud/
-    """
+    structured_llm = llm.with_structured_output(SearchQueryList)
 
-    my_configurable_param: str
+    formatted_prompt = query_writer_prompt.format(
+        current_date=get_current_date(),
+        research_topic=get_research_topic(state["messages"]),
+    )
 
-
-@dataclass
-class State:
-    """Input state for the agent.
-
-    Defines the initial structure of incoming data.
-    See: https://langchain-ai.github.io/langgraph/concepts/low_level/#state
-    """
-
-    changeme: str = "example"
-
-
-async def call_model(state: State, config: RunnableConfig) -> Dict[str, Any]:
-    """Process input and returns output.
-
-    Can use runtime configuration to alter behavior.
-    """
-    configuration = config["configurable"]
-    return {
-        "changeme": "output from call_model. "
-        f'Configured with {configuration.get("my_configurable_param")}'
-    }
+    result = structured_llm.invoke(formatted_prompt)
+    return {"query_list": result.query}
 
 
-# Define the graph
-graph = (
-    StateGraph(State, config_schema=Configuration)
-    .add_node(call_model)
-    .add_edge("__start__", "call_model")
-    .compile(name="New Graph")
-)
+# # Define the graph
+# graph = (
+#     StateGraph(State, config_schema=Configuration)
+#     .add_node(call_model)
+#     .add_edge("__start__", "call_model")
+#     .compile(name="New Graph")
+# )
