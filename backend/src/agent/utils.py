@@ -35,7 +35,3 @@ def resolve_urls(urls_to_resolve, id):
             resolved[url] = f"{prefix}{id}-{idx}"
 
     return resolved
-
-
-def get_citations():
-    """"""

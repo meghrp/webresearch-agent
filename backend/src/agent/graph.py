@@ -3,10 +3,12 @@ from __future__ import annotations
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, Send
+from langchain_core.messages import AIMessage
+from langgraph.graph import START, END
 from state import *
 
 from schemas import SearchQueryList, Reflection
-from prompts import query_writer_prompt, web_research_prompt, reflection_instructions
+from prompts import *
 from utils import get_current_date, get_research_topic, resolve_urls
 
 from google.genai import Client
@@ -97,10 +99,68 @@ def reflection(state: ConversationState, config) -> ReflectionState:
         "number_of_ran_queries": len(state["search_query"]),
     }
 
+
+def evaluate_research(state: ReflectionState, config) -> ConversationState:
+    """Node that evaluates the research and decides whether to continue or not."""
+    max_research_loops = state.get("max_research_loops", config.max_research_loops)
+
+    if state["is_sufficient"] or state["research_loop_count"] >= max_research_loops:
+        return "generate_answer"
+    return [
+        Send(
+            "web_research",
+            {"search_query": followup_query, "id": state["number_of_ran_queries"] + i},
+        )
+        for i, followup_query in enumerate(state["follow_up_queries"])
+    ]
+
+
+def generate_answer(state: ConversationState, config):
+    """Node that finalizes and formats the web research summary"""
+    formatted_prompt = answer_instructions.format(
+        current_date=get_current_date(),
+        research_topic=get_research_topic(state["messages"]),
+        summaries="\n---\n\n".join(state["web_research_result"]),
+    )
+
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-pro",
+        temperature=0,
+        max_retries=2,
+        api_key=os.getenv("GEMINI_API_KEY"),
+    )
+    result = llm.invoke(formatted_prompt)
+
+    sources = []
+    for source in state["sources_gathered"]:
+        if source["short_url"] in result.content:
+            result.content = result.content.replace(
+                source["short_url"], source["value"]
+            )
+            sources.append(source)
+
+    return {
+        "messages": [AIMessage(content=result.content)],
+        "sources_gathered": sources,
+    }
+
+
 # # Define the graph
-# graph = (
-#     StateGraph(State, config_schema=Configuration)
-#     .add_node(call_model)
-#     .add_edge("__start__", "call_model")
-#     .compile(name="New Graph")
-# )
+builder = StateGraph(ConversationState)
+
+builder.add_node("create_queries", create_queries)
+builder.add_node("web_research", web_research)
+builder.add_node("reflection", reflection)
+builder.add_node("generate_answer", generate_answer)
+
+builder.add_edge(START, "create_queries")
+builder.add_conditional_edges(
+    "create_queries", continue_to_web_research, ["web_research"]
+)
+builder.add_edge("web_research", "reflection")
+builder.add_conditional_edges(
+    "reflection", evaluate_research, ["web_research", "generate_answer"]
+)
+builder.add_edge("generate_answer", END)
+
+graph = builder.compile(name="webresearch_agent")
