@@ -14,6 +14,8 @@ class ConversationState(TypedDict):
     sources_gathered: Annotated[list, operator.add]
     web_research_result: Annotated[list, operator.add]
     query_list: Annotated[list, operator.add]
+    max_research_loops: int
+    research_loop_count: int
 
 
 class ReflectionState(TypedDict):
@@ -21,6 +23,7 @@ class ReflectionState(TypedDict):
     knowledge_gap: str
     follow_up_queries: Annotated[list, operator.add]
     research_loop_count: int
+    max_research_loops: int
     number_of_ran_queries: int
 
 

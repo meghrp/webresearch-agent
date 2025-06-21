@@ -25,13 +25,28 @@ def get_research_topic(messages) -> str:
 
 
 def resolve_urls(urls_to_resolve, id):
-    """Create a map of the vertex ai search urls (very long) to a short url with a unique id for each url."""
+    """Create a list of citation objects with segments for the grounding chunks."""
     prefix = f"https://vertexaisearch.cloud.google.com/id/"
-    urls = [site.web.uri for site in urls_to_resolve]
 
-    resolved = {}
-    for idx, url in enumerate(urls):
-        if url not in resolved:
-            resolved[url] = f"{prefix}{id}-{idx}"
+    resolved_urls = []
+    seen_urls = {}
 
-    return resolved
+    for i, site in enumerate(urls_to_resolve):
+        url = site.web.uri
+
+        if url not in seen_urls:
+            seen_urls[url] = f"{prefix}{id}-{i}"
+
+        segment = {
+            "label": (
+                site.web.title.split(".")[0]
+                if hasattr(site.web, "title") and site.web.title
+                else f"Source {i}"
+            ),
+            "short_url": seen_urls[url],
+            "value": url,
+        }
+
+        resolved_urls.append({"segments": [segment]})
+
+    return resolved_urls

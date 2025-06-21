@@ -2,14 +2,20 @@ from __future__ import annotations
 
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.graph import StateGraph, Send
+from langgraph.graph import StateGraph
+from langgraph.types import Send
 from langchain_core.messages import AIMessage
 from langgraph.graph import START, END
-from state import *
+from agent.state import (
+    ConversationState,
+    QueryState,
+    WebResearchState,
+    ReflectionState,
+)
 
-from schemas import SearchQueryList, Reflection
-from prompts import *
-from utils import get_current_date, get_research_topic, resolve_urls
+from agent.schemas import SearchQueryList, Reflection
+from agent.prompts import *
+from agent.utils import get_current_date, get_research_topic, resolve_urls
 
 from google.genai import Client
 
@@ -48,7 +54,7 @@ def web_research(state: WebResearchState, config):
     """Node that performs web research with grounding metadata from Gemini 2.0 Flash API."""
     formatted_prompt = web_research_prompt.format(
         current_date=get_current_date(),
-        research_topic=get_research_topic(state["search_query"]),
+        research_topic=state["search_query"],
     )
 
     response = genai_client.models.generate_content(
@@ -77,6 +83,7 @@ def web_research(state: WebResearchState, config):
 
 def reflection(state: ConversationState, config) -> ReflectionState:
     """Node that reflects on the web research results and generates follow-up queries."""
+    state["research_loop_count"] = state.get("research_loop_count", 0) + 1
     formatted_prompt = reflection_instructions.format(
         current_date=get_current_date(),
         research_topic=get_research_topic(state["messages"]),
@@ -102,7 +109,9 @@ def reflection(state: ConversationState, config) -> ReflectionState:
 
 def evaluate_research(state: ReflectionState, config) -> ConversationState:
     """Node that evaluates the research and decides whether to continue or not."""
-    max_research_loops = state.get("max_research_loops", config.max_research_loops)
+    max_research_loops = state.get("max_research_loops")
+    if max_research_loops is None:
+        max_research_loops = config.max_research_loops
 
     if state["is_sufficient"] or state["research_loop_count"] >= max_research_loops:
         return "generate_answer"
