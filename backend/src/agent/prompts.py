@@ -3,7 +3,7 @@ query_writer_prompt = """Your goal is to generate sophisticated and diverse web 
 Instructions:
 - Always prefer a single search query, only add another query if the original question requests multiple aspects or elements and one query is not enough.
 - Each query should focus on one specific aspect of the original question.
-- Don't produce more than 3 queries.
+- Don't produce more than {number_queries} queries.
 - Queries should be diverse, if the topic is broad, generate more than 1 query.
 - Don't generate multiple similar queries, 1 is enough.
 - Query should ensure that the most current information is gathered. The current date is {current_date}.

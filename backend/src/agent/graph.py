@@ -19,13 +19,20 @@ from agent.utils import get_current_date, get_research_topic, resolve_urls
 
 from google.genai import Client
 
+from agent.configuration import Configuration
+
 genai_client = Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 def create_queries(state: ConversationState, config) -> dict:
     """Node that creates a list of search queries based on user's question."""
+    configurable = Configuration.from_runnable_config(config)
+
+    if state.get("initial_search_query_count") is None:
+        state["initial_search_query_count"] = configurable.number_of_initial_queries
+
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model=configurable.query_generator_model,
         temperature=1.0,
         max_retries=2,
         api_key=os.getenv("GEMINI_API_KEY"),
@@ -36,6 +43,7 @@ def create_queries(state: ConversationState, config) -> dict:
     formatted_prompt = query_writer_prompt.format(
         current_date=get_current_date(),
         research_topic=get_research_topic(state["messages"]),
+        number_queries=state["initial_search_query_count"],
     )
 
     result = structured_llm.invoke(formatted_prompt)
@@ -52,13 +60,14 @@ def continue_to_web_research(state: QueryState):
 
 def web_research(state: WebResearchState, config):
     """Node that performs web research with grounding metadata from Gemini 2.0 Flash API."""
+    configurable = Configuration.from_runnable_config(config)
     formatted_prompt = web_research_prompt.format(
         current_date=get_current_date(),
         research_topic=state["search_query"],
     )
 
     response = genai_client.models.generate_content(
-        model="gemini-2.0-flash",
+        model=configurable.query_generator_model,
         contents=formatted_prompt,
         config={
             "tools": [{"google_search": {}}],
@@ -83,7 +92,11 @@ def web_research(state: WebResearchState, config):
 
 def reflection(state: ConversationState, config) -> ReflectionState:
     """Node that reflects on the web research results and generates follow-up queries."""
+    configurable = Configuration.from_runnable_config(config)
+
     state["research_loop_count"] = state.get("research_loop_count", 0) + 1
+    reasoning_model = state.get("reasoning_model", configurable.reflection_model)
+
     formatted_prompt = reflection_instructions.format(
         current_date=get_current_date(),
         research_topic=get_research_topic(state["messages"]),
@@ -91,7 +104,7 @@ def reflection(state: ConversationState, config) -> ReflectionState:
     )
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
+        model=reasoning_model,
         temperature=1.0,
         max_retries=2,
         api_key=os.getenv("GEMINI_API_KEY"),
@@ -109,9 +122,11 @@ def reflection(state: ConversationState, config) -> ReflectionState:
 
 def evaluate_research(state: ReflectionState, config) -> ConversationState:
     """Node that evaluates the research and decides whether to continue or not."""
+    configurable = Configuration.from_runnable_config(config)
+
     max_research_loops = state.get("max_research_loops")
     if max_research_loops is None:
-        max_research_loops = config.max_research_loops
+        max_research_loops = configurable.max_research_loops
 
     if state["is_sufficient"] or state["research_loop_count"] >= max_research_loops:
         return "generate_answer"
@@ -126,6 +141,9 @@ def evaluate_research(state: ReflectionState, config) -> ConversationState:
 
 def generate_answer(state: ConversationState, config):
     """Node that finalizes and formats the web research summary"""
+    configurable = Configuration.from_runnable_config(config)
+    reasoning_model = state.get("reasoning_model", configurable.answer_model)
+
     formatted_prompt = answer_instructions.format(
         current_date=get_current_date(),
         research_topic=get_research_topic(state["messages"]),
@@ -133,7 +151,7 @@ def generate_answer(state: ConversationState, config):
     )
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-pro",
+        model=reasoning_model,
         temperature=0,
         max_retries=2,
         api_key=os.getenv("GEMINI_API_KEY"),
@@ -155,7 +173,7 @@ def generate_answer(state: ConversationState, config):
 
 
 # # Define the graph
-builder = StateGraph(ConversationState)
+builder = StateGraph(ConversationState, config_schema=Configuration)
 
 builder.add_node("create_queries", create_queries)
 builder.add_node("web_research", web_research)

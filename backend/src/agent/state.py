@@ -12,6 +12,7 @@ class ConversationState(TypedDict):
     web_research_result: Annotated[list, operator.add]
     search_query: Annotated[list, operator.add]
     sources_gathered: Annotated[list, operator.add]
+    initial_search_query_count: int
     web_research_result: Annotated[list, operator.add]
     query_list: Annotated[list, operator.add]
     max_research_loops: int
