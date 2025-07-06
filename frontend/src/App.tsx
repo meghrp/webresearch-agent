@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useStream } from '@langchain/langgraph-sdk/react'
 import { ChatMessagesView } from './components/ChatMessagesView'
 import { WelcomeScreen } from './components/WelcomeScreen'
-import type { Message, ProcessedEvent, EffortLevel } from './types'
+import type { ProcessedEvent, EffortLevel } from './types'
+import type { Message } from '@langchain/langgraph-sdk'
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([])
+  // const [messages, setMessages] = useState<Message[]>([])
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([])
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({})
   const [error, setError] = useState<string | null>(null)
@@ -13,7 +14,11 @@ function App() {
   const finalizedEvent = useRef(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   // LangGraph SDK stream configuration
-  const thread = useStream({
+  const thread = useStream<{
+    messages: Message[];
+    initial_search_query_count: number;
+    max_research_loops: number;
+  }>({
     apiUrl: import.meta.env.DEV ? "http://localhost:2024" : "http://localhost:8123",
     assistantId: "agent",
     messagesKey: "messages",
@@ -93,39 +98,30 @@ function App() {
     return configs[effort]
   }
 
-  // Handle new message submission
   const handleSubmit = useCallback((content: string, effort: EffortLevel) => {
+    if (!content.trim()) return;
     setError(null)
-    
-    // Create user message
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      type: 'human',
-      content,
-      timestamp: new Date()
-    }
 
-    // Add user message to chat
-    setMessages(prev => [...prev, userMessage])
-    
-    // Clear current timeline for new request
     setProcessedEventsTimeline([])
     setCurrentStreamingMessageId(null)
+    finalizedEvent.current = false;
 
-    // Get effort configuration
     const effortConfig = getEffortConfig(effort)
 
-    // Submit to agent with configuration
-    const agentConfig = {
-      messages: [...messages, userMessage].map(msg => ({
-        role: msg.type === 'human' ? 'user' : 'assistant',
-        content: msg.content
-      })),
+    const newMessages: Message[] = [
+      ...(thread.messages || []),
+      {
+        type: "human",
+        content: content,
+        id: Date.now().toString(),
+      },
+    ];
+
+    thread.submit({
+      messages: newMessages,
       initial_search_query_count: effortConfig.queries,
       max_research_loops: effortConfig.loops,
-    }
-
-    thread.submit(agentConfig)
+    })
   },[thread]);
 
   useEffect(() => {
@@ -141,62 +137,39 @@ function App() {
 
   // Handle agent response
   useEffect(() => {
-    if (thread.messages && thread.messages.length > 0) {
-      const latestMessage = thread.messages[thread.messages.length - 1]
-      
-      // Only process assistant messages
-      if (latestMessage.type === 'ai') {
-        const messageContent = typeof latestMessage.content === 'string' ? latestMessage.content : JSON.stringify(latestMessage.content)
 
-        setMessages(prev => {
-          // If we don't have a current streaming message, create one
-          if (!currentStreamingMessageId) {
-            const newMessageId = `ai-${Date.now()}`
-            setCurrentStreamingMessageId(newMessageId)
-            
-            const aiMessage: Message = {
-              id: newMessageId,
-              type: 'ai',
-              content: messageContent,
-              timestamp: new Date()
-            }
-            
-            return [...prev, aiMessage]
-          } else {
-            // Update the existing streaming message
-            return prev.map(msg => 
-              msg.id === currentStreamingMessageId 
-                ? { ...msg, content: messageContent }
-                : msg
-            )
-          }
-        })
-
-        // Move timeline to historical activities when response is complete
-        if (!thread.isLoading && processedEventsTimeline.length > 0 && currentStreamingMessageId) {
-          setHistoricalActivities(prev => ({
-            ...prev,
-            [currentStreamingMessageId]: [...processedEventsTimeline]
-          }))
-          setProcessedEventsTimeline([])
-          setCurrentStreamingMessageId(null)
-        }
+    if (finalizedEvent.current && !thread.isLoading && processedEventsTimeline.length > 0) {
+      const lastMessage = thread.messages[thread.messages.length - 1];
+      if (lastMessage && lastMessage.type === "ai" && lastMessage.id) {
+        setHistoricalActivities((prev) => ({
+          ...prev,
+          [lastMessage.id!]: [...processedEventsTimeline],
+        }));
       }
+      finalizedEvent.current = false;
     }
+    setProcessedEventsTimeline([])
+    setCurrentStreamingMessageId(null)
   }, [thread.messages, thread.isLoading, processedEventsTimeline])
 
-  const hasMessages = messages.length > 0
+  const handleCancel = useCallback(() => {
+    thread.stop();
+    window.location.reload();
+  }, [thread]);
+
+  const hasMessages = thread.messages.length > 0
 
   return (
     <div className="min-h-screen bg-background">
       {hasMessages ? (
         <div className="container mx-auto h-screen flex flex-col">
           <ChatMessagesView
-            messages={messages}
+            messages={thread.messages}
             processedEventsTimeline={processedEventsTimeline}
             historicalActivities={historicalActivities}
             isLoading={thread.isLoading}
             onSubmit={handleSubmit}
+            onCancel={handleCancel}
             error={error}
           />
         </div>
@@ -204,6 +177,7 @@ function App() {
         <WelcomeScreen
           onSubmit={handleSubmit}
           isLoading={thread.isLoading}
+          onCancel={handleCancel}
         />
       )}
     </div>

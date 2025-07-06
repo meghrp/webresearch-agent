@@ -4,13 +4,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, StopCircle } from 'lucide-react'
 import type { EffortLevel, ValidationResult } from '../types'
 
 interface InputFormProps {
   onSubmit: (content: string, effort: EffortLevel) => void
+  onCancel: () => void
   isLoading: boolean
-  disabled?: boolean
 }
 
 const effortConfig = {
@@ -31,7 +31,7 @@ const validateInput = (input: string): ValidationResult => {
   return { isValid: true }
 }
 
-export function InputForm({ onSubmit, isLoading, disabled = false }: InputFormProps) {
+export function InputForm({ onSubmit, isLoading, onCancel }: InputFormProps) {
   const [message, setMessage] = useState('')
   const [effort, setEffort] = useState<EffortLevel>('medium')
   const [error, setError] = useState<string | null>(null)
@@ -56,6 +56,8 @@ export function InputForm({ onSubmit, isLoading, disabled = false }: InputFormPr
     }
   }
 
+  const isSubmitDisabled = !message.trim() || isLoading;
+
   return (
     <Card className="w-full">
       <CardContent className="p-4">
@@ -65,9 +67,9 @@ export function InputForm({ onSubmit, isLoading, disabled = false }: InputFormPr
             <Textarea
               placeholder="Ask me anything to research..."
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={disabled || isLoading}
+              disabled={isLoading}
               className="min-h-[100px] resize-none"
               maxLength={2000}
             />
@@ -118,23 +120,27 @@ export function InputForm({ onSubmit, isLoading, disabled = false }: InputFormPr
             </div>
 
             {/* Submit Button */}
-            <Button 
-              type="submit" 
-              disabled={disabled || isLoading || !message.trim()}
-              className="min-w-[120px]"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Researching...
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4 mr-2" />
-                  Research
-                </>
-              )}
-            </Button>
+            {isLoading ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-red-500 hover:text-red-400 hover:bg-red-500/10 p-2 cursor-pointer rounded-full transition-all duration-200"
+                onClick={onCancel}
+              >
+                <StopCircle className="h-5 w-5" />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                variant="ghost"
+                disabled={isSubmitDisabled}
+                className="min-w-[120px]"
+              >
+                Research
+                <Send className="w-4 h-4 mr-2" />
+              </Button>
+            )}
           </div>
 
           {/* Keyboard Hint */}

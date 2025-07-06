@@ -11,11 +11,12 @@ import {
   Target
 } from 'lucide-react'
 import { InputForm } from './InputForm'
-import type { EffortLevel, ReasoningModel } from '../types'
+import type { EffortLevel } from '../types'
 
 interface WelcomeScreenProps {
-  onSubmit: (content: string, effort: EffortLevel, model: ReasoningModel) => void
+  onSubmit: (content: string, effort: EffortLevel) => void
   isLoading: boolean
+  onCancel: () => void
 }
 
 const effortLevels = [
@@ -68,7 +69,7 @@ const researchSteps = [
   }
 ]
 
-export function WelcomeScreen({ onSubmit, isLoading }: WelcomeScreenProps) {
+export function WelcomeScreen({ onSubmit, isLoading, onCancel }: WelcomeScreenProps) {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       {/* Header */}
@@ -190,6 +191,7 @@ export function WelcomeScreen({ onSubmit, isLoading }: WelcomeScreenProps) {
         <InputForm 
           onSubmit={onSubmit}
           isLoading={isLoading}
+          onCancel={onCancel}
         />
       </div>
     </div>

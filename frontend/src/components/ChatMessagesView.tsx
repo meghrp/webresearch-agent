@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Copy, User, Bot, AlertCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import type { Message, ProcessedEvent, EffortLevel, ReasoningModel } from '../types'
+import type { ProcessedEvent, EffortLevel } from '../types'
+import type { Message } from '@langchain/langgraph-sdk'
 import { ActivityTimeline } from './ActivityTimeline'
 import { InputForm } from './InputForm'
 import { cn } from '@/lib/utils'
@@ -14,7 +15,8 @@ interface ChatMessagesViewProps {
   processedEventsTimeline: ProcessedEvent[]
   historicalActivities: Record<string, ProcessedEvent[]>
   isLoading: boolean
-  onSubmit: (content: string, effort: EffortLevel, model: ReasoningModel) => void
+  onSubmit: (content: string, effort: EffortLevel) => void
+  onCancel: () => void
   error?: string | null
 }
 
@@ -24,6 +26,7 @@ export function ChatMessagesView({
   historicalActivities,
   isLoading, 
   onSubmit, 
+  onCancel,
   error 
 }: ChatMessagesViewProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
@@ -102,7 +105,7 @@ export function ChatMessagesView({
                         {message.type === 'human' ? 'You' : message.type === 'ai' ? 'AI Research Agent' : 'System'}
                       </Badge>
                       <span className="text-xs opacity-70">
-                        {message.timestamp.toLocaleTimeString()}
+                        {/* {message.timestamp.toLocaleTimeString()} */}
                       </span>
                     </div>
                     
@@ -110,7 +113,7 @@ export function ChatMessagesView({
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0 opacity-70 hover:opacity-100"
-                      onClick={() => handleCopyMessage(message.id, message.content)}
+                      onClick={() => handleCopyMessage}
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -145,10 +148,10 @@ export function ChatMessagesView({
                           )
                         }}
                       >
-                        {message.content}
+                        {message.content.toString()}
                       </ReactMarkdown>
                     ) : (
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                      <p className="whitespace-pre-wrap">{message.content.toString()}</p>
                     )}
                   </div>
 
@@ -174,9 +177,9 @@ export function ChatMessagesView({
                   )}
                   
                   {/* Historical activities */}
-                  {historicalActivities[message.id] && (
+                  {historicalActivities[message.id!] && (
                     <ActivityTimeline 
-                      events={historicalActivities[message.id]}
+                      events={historicalActivities[message.id!]}
                       isLoading={false}
                       className="mb-4"
                     />
@@ -216,7 +219,7 @@ export function ChatMessagesView({
         <InputForm 
           onSubmit={onSubmit}
           isLoading={isLoading}
-          disabled={!!error}
+          onCancel={onCancel}
         />
       </div>
     </div>
