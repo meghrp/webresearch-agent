@@ -165,29 +165,27 @@ export function ChatMessagesView({
               </div>
 
               {/* Activity Timeline for AI messages */}
-              {message.type === 'ai' && (
-                <div className="ml-11">
-                  {/* Current activity (if this is the latest AI message) */}
-                  {index === messages.length - 1 && (
-                    <ActivityTimeline 
-                      events={processedEventsTimeline}
-                      isLoading={isLoading}
-                      className="mb-4"
-                    />
-                  )}
-                  
-                  {/* Historical activities */}
-                  {historicalActivities[message.id!] && (
-                    <ActivityTimeline 
-                      events={historicalActivities[message.id!]}
-                      isLoading={false}
-                      className="mb-4"
-                    />
-                  )}
-                </div>
-              )}
+              
             </div>
           ))}
+          {isLoading && messages.length === 0 || 
+            messages[messages.length - 1].type === 'human' && (
+            <div className="ml-11">
+              <ActivityTimeline 
+                events={processedEventsTimeline}
+                isLoading={isLoading}
+                className="mb-4"
+              />
+              {/* Historical activities
+              {historicalActivities[message.id!] && (
+                <ActivityTimeline 
+                  events={historicalActivities[message.id!]}
+                  isLoading={false}
+                  className="mb-4"
+                />
+              )} */}
+            </div>
+          )}
 
           {/* Error Display */}
           {error && (
