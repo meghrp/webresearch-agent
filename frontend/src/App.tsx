@@ -6,11 +6,9 @@ import type { ProcessedEvent, EffortLevel } from './types'
 import type { Message } from '@langchain/langgraph-sdk'
 
 function App() {
-  // const [messages, setMessages] = useState<Message[]>([])
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<ProcessedEvent[]>([])
   const [historicalActivities, setHistoricalActivities] = useState<Record<string, ProcessedEvent[]>>({})
   const [error, setError] = useState<string | null>(null)
-  const [currentStreamingMessageId, setCurrentStreamingMessageId] = useState<string | null>(null)
   const finalizedEvent = useRef(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   // LangGraph SDK stream configuration
@@ -103,7 +101,6 @@ function App() {
     setError(null)
 
     setProcessedEventsTimeline([])
-    setCurrentStreamingMessageId(null)
     finalizedEvent.current = false;
 
     const effortConfig = getEffortConfig(effort)
@@ -137,7 +134,6 @@ function App() {
 
   // Handle agent response
   useEffect(() => {
-
     if (finalizedEvent.current && !thread.isLoading && processedEventsTimeline.length > 0) {
       const lastMessage = thread.messages[thread.messages.length - 1];
       if (lastMessage && lastMessage.type === "ai" && lastMessage.id) {
@@ -147,9 +143,8 @@ function App() {
         }));
       }
       finalizedEvent.current = false;
+      setProcessedEventsTimeline([])
     }
-    setProcessedEventsTimeline([])
-    setCurrentStreamingMessageId(null)
   }, [thread.messages, thread.isLoading, processedEventsTimeline])
 
   const handleCancel = useCallback(() => {
